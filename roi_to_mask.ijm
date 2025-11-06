@@ -1,3 +1,4 @@
+//Convert ROIs generated in ABBA (Aligning Big Brains & Atlases) to tif masks
 v = newArray("PTLp","ACA","ILA","AI","FRP","AUD","RSP","LSX","sAMY","MB","SSp-bfd",
 "SSp-ll","SSp-m","SSp-n","MY","SSp-tr","SSp-ul","SSs","STRd","STRv","CBN","CBX",
 "TEa","CLA","VIS","VISC","OLF","CTXsp","ORB","P","cc","cst","PAL","RHP","DORpm",

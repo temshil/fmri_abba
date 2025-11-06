@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jan  9 16:29:55 2025
-
-@author: shili
-"""
 import glob
 import os
 from PIL import Image
@@ -15,26 +9,23 @@ from nilearn.connectome import ConnectivityMeasure
 from nilearn.image import resample_to_img
 import matplotlib.pyplot as plt
 
-os.chdir('parent/directory')
+os.chdir('path/to/cwd')
 
-# Create NIFTI atlas using ABBA registration on ImageJ https://abba-documentation.readthedocs.io/en/latest/
-# Macro script for ImageJ to convert putlines of the registered brain regions to masks is roi_to_mask.ijm
-
-df = pd.read_excel('annotation_label_IDs.xlsx') #annotaion IDs from AIDAmri
+df = pd.read_excel('path/to/annotation_label_IDs.xlsx') 
 
 label_dict = df.set_index('acronym')['id'].to_dict()
 
 input_folder = 'masks'
+# Initialize 3D arrays
+right = np.zeros((64, 64, 20))
+left = np.zeros((64, 64, 20))
+masks = np.zeros((64, 64, 20))
 
-right = np.zeros((256, 256, 30))
-left = np.zeros((256, 256, 30))
-masks = np.zeros((256, 256, 30))
-
-for i in range(30):
-    z = f"{i:02}"  # Zero-padded index
+for i in range(20):
+    z = f"{i:03}"  # Zero-padded index
     image_name = f"slice_{z}"
     image_files = glob.glob(f"{input_folder}/**/*{image_name}*.tif", recursive=True)
-    regions_combined = np.zeros((256, 256))
+    regions_combined = np.zeros((64, 64))  # Initialize combined region array
 
     # Process each file
     for k in image_files:
@@ -50,14 +41,14 @@ for i in range(30):
             left[:, :, i] = modified_image_array
         else:
             # Extract region key
-            region_key =  k[14:].split('.')[0] 
-            if region_key in label_dict:
+            region_key =  k[15:].split('.')[0] # Assumes standard file naming
+            if region_key in label_dict:  # Ensure the key exists in the dictionary
                 new_pixel_value = label_dict[region_key]
                 print(f"Processing region: {region_key} with ID {new_pixel_value}")
                 image = Image.open(k)
                 image_array = np.array(image)
                 # Replace pixel values
-                image_array = image_array 
+                image_array = image_array.astype(np.int32)  
                 modified_image_array = np.where(image_array != 0, new_pixel_value, image_array)
                 modified_image_array = np.rot90(modified_image_array, k=-1)
                 regions_combined += modified_image_array
@@ -68,33 +59,23 @@ largest_right_label = masks_right.max()
 masks_right_label = np.where(masks_right > 0, masks_right + largest_right_label, 0)
 masks_hemi = masks*left + masks_right_label
 
-T2mri = nib.load('path/to/T2-weighted-image-used-in-ABBA')
-atlas_nifti = nib.Nifti1Image(masks_hemi, T2mri.affine, T2mri.header)
-nib.save(atlas_nifti, 'path/to/abba-atlas.nii')
+fmri = nib.load('path/to/fmri')
+atlas_nifti = nib.Nifti1Image(masks_hemi, fmri.affine, fmri.header)
+nib.save(atlas_nifti, 'path/to/abba_atlas.nii')
 
+fmri_img = nib.load('path/to/bandpassed_smoothed_motion/slicetime-corrected-fmri')  # Replace with your file path
+fmri_data = fmri_img.get_fdata()  # 4D array (x, y, z, t)
 
-# For this pipeline, fMRI image was preprocessed in CONN toolbox using the following functions:
-# functional Realignment (subject motion estimation and correction)
-# functional Slice timing correction (STC; correction for inter-slice differeces in acquisition time)
-# functional Smoothing (spatial convolution with Gaussian kernel), 0.5 mm
-# functional Band-pass filtering (temporal filtering of BOLD data),  0.01 to 0.3 Hz. 
-
-fmri_img = nib.load('path/to/processed-fmri')
-fmri_data = fmri_img.get_fdata()
-
-# Resample atlas from T2-weighted dimensions to fMRI dimensions
-resampled_atlas = resample_to_img(source_img=atlas_nifti, target_img=fmri_img, interpolation='nearest')
-resampled_atlas_data = resampled_atlas.get_fdata()
-unique_labels, voxel_counts = np.unique(resampled_atlas_data, return_counts=True)
+resampled_atlas = resample_to_img(source_img=atlas_nifti, target_img=fmri_img)
 
 # Initialize NiftiLabelsMasker
 masker = NiftiLabelsMasker(labels_img=resampled_atlas, verbose=1, standardize=True, detrend=True)
 masker.fit(fmri_img)
 report = masker.generate_report()
-report.save_as_html("path/to/report.html")
+report.save_as_html('path/to/report.html')
 
 # Load motion parameters
-motion_params = np.loadtxt("path/to/CONN-output/rp_fMRI.txt")  
+motion_params = np.loadtxt('path/to/motionparameters.txt')  
 
 # Calculate the global signal by averaging over all the voxels at each time point
 global_signal = np.mean(fmri_data, axis=(0, 1, 2))  # Mean over x, y, z dimensions
